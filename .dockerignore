@@ -1,0 +1,5 @@
+.graveyard
+.history
+.git
+dist
+node_modules

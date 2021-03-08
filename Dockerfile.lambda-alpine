@@ -1,0 +1,53 @@
+# Currently not working b/c compile aws tools fails
+# If I ever get it working, should convert it to multistage like Dockerfile.lambda-debian
+
+
+# ref: https://nodejs.org/en/docs/guides/nodejs-docker-webapp/
+# ref: https://github.com/Zenika/alpine-chrome#run-examples
+# ref: https://www.npmjs.com/package/aws-lambda-ric # see this for lambda + 2-stage build instructions
+
+FROM zenika/alpine-chrome:with-node
+
+# Install aws-lambda-cpp build dependencies
+USER root
+RUN apk update
+RUN apk add --no-cache \
+    build-base \
+    libtool \
+    autoconf \
+    automake \
+    libexecinfo-dev \
+    make \
+    cmake \
+    libcurl \
+    git
+USER chrome
+
+WORKDIR /usr/src/app
+RUN rm -rf *
+COPY package*.json ./
+RUN npm i
+
+USER root
+RUN apk add --no-cache build-base make cmake g++ unzip autoconf automake libtool git  zlib-dev libstdc++ libexecinfo-dev libcurl curl curl-dev
+
+RUN apk add git cmake make clang build-base llvm-static llvm-dev clang-static clang-dev
+
+# RUN apk add alpine-sdk cmake make clang clang-static clang-dev llvm-dev llvm-static \
+# 	&& git clone --depth=1 --recursive https://github.com/MaskRay/ccls \
+# 	&& cd ccls \
+# 	&& cmake -H. -BRelease -DCMAKE_BUILD_TYPE=Release \
+# 	&& cmake --build Release --target install
+# RUN apk add alpine-sdk clang llvm
+
+USER chrome
+
+# RUN npm install aws-lambda-ric
+USER root
+RUN npm i https://github.com/bdombro/aws-lambda-nodejs-runtime-interface-client.git
+USER chrome
+COPY . .
+RUN npx tsc
+
+ENTRYPOINT ["/usr/bin/npx", "aws-lambda-ric"]
+CMD ["app.handler"]

@@ -1,0 +1,17 @@
+# ref: https://nodejs.org/en/docs/guides/nodejs-docker-webapp/
+# ref: https://github.com/Zenika/alpine-chrome#run-examples
+# ref: https://www.npmjs.com/package/aws-lambda-ric # see this for lambda + 2-stage build instructions
+
+FROM zenika/alpine-chrome:with-node
+
+WORKDIR /usr/src/app
+RUN rm -rf *
+COPY package*.json ./
+RUN npm i
+COPY . .
+RUN npx tsc
+# Remove dev node_modules
+RUN rm -rf node_modules && npm i --production
+
+EXPOSE 8080
+CMD [ "node", "server.js" ]

@@ -1,0 +1,80 @@
+# 2-stage docker build to reduce image size, bc aws tool building is heavy.
+
+# ref: https://nodejs.org/en/docs/guides/nodejs-docker-webapp/
+# ref: https://github.com/Zenika/alpine-chrome#run-examples
+# ref: https://www.npmjs.com/package/aws-lambda-ric # see this for lambda + 2-stage build instructions
+
+# Define custom function directory
+ARG FUNCTION_DIR="/function"
+
+
+###############################
+# Docker Build Stage 1
+###############################
+
+FROM node:14.16.0-buster as build-image
+
+# Include global arg in this stage of the build
+ARG FUNCTION_DIR
+WORKDIR ${FUNCTION_DIR}
+
+
+# Multi-stage dep install to (1) leverage docker layer caching and (2) cleanup
+
+# Stage 1: Install system deps
+RUN apt update
+RUN apt-get install -y \
+  g++ \
+  make \
+  cmake \
+  unzip \
+  autoconf \
+  libtool \
+  libcurl4-openssl-dev \
+  python3 \
+  rsync
+
+# Stage 2: Pre-build aws-lambda-ric so that we dont need rebuild on every change to package.json
+RUN npm init -y &> /dev/null
+RUN npm i aws-lambda-ric
+RUN mv node_modules aws_node_modules
+
+# Stage 3: Copy package*.json and install deps
+COPY package*.json ./
+RUN npm i
+
+# Stage 4: Copy remaining source files
+COPY . .
+
+# Stage 5: Transpile typescript
+RUN npx tsc
+
+# Stage 6: Remove dev node_modules
+RUN rm -rf node_modules && npm i --production
+
+# Stage 7: Merge aws-lambda-ric deps
+RUN rsync -ar aws_node_modules/ node_modules
+
+
+
+###############################
+# Docker Build Stage 2
+###############################
+
+FROM node:14.16.0-buster-slim
+
+# Include global arg in this stage of the build
+ARG FUNCTION_DIR
+WORKDIR ${FUNCTION_DIR}
+
+# Install chrome
+RUN apt update
+RUN apt install -y wget
+RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+RUN apt install -y ./google-chrome-stable_current_amd64.deb
+
+# Copy in the built dependencies
+COPY --from=build-image ${FUNCTION_DIR} ${FUNCTION_DIR}
+
+ENTRYPOINT ["/usr/bin/npx", "aws-lambda-ric"]
+CMD ["app.handler"]

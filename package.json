@@ -1,0 +1,44 @@
+{
+  "name": "lighthouse-benchmark",
+  "version": "1.0.41",
+  "description": "This repo is a set of 2 scripts:",
+  "main": "index.js",
+  "config": {
+    "zip": "bundle.zip",
+    "function": "lighthouse-benchmark",
+    "testUrl": "https://storefront:3131labs@dev02-ua03-us.sfcc.ua-ecm.com/on/demandware.store/Sites-US-Site"
+  },
+  "scripts": {
+    "bump": "npm --no-git-tag-version version patch",
+    "build": "tsc",
+    "start": "node server.js",
+    "test": "curl -o report.json \"localhost:8080?url=$npm_package_config_testUrl\"",
+    "docker:build": "docker build -t bdombro/lighthouse-benchmark-server -f Dockerfile.server-alpine .",
+    "docker:start": "docker run -p 8080:8080 bdombro/lighthouse-benchmark-server",
+    "docker:test": "npm run test",
+    "lambda:build": "docker build -t bdombro/lighthouse-benchmark-lambda -f Dockerfile.lambda-debian .",
+    "lambda:build:dev": "docker build -t bdombro/lighthouse-benchmark-lambda -f Dockerfile.lambda-debian.dev .",
+    "lambda:start": "docker run -v ~/.aws-lambda-rie:/aws-lambda -p 8080:8080 --entrypoint /aws-lambda/aws-lambda-rie  bdombro/lighthouse-benchmark-lambda /usr/local/bin/npx aws-lambda-ric app.handler",
+    "lambda:test": "curl -o report.json -XPOST \"http://localhost:8080/2015-03-31/functions/function/invocations\" -d \"{\\\"httpMethod\\\": \\\"GET\\\", \\\"queryStringParameters\\\": {\\\"url\\\": \\\"$npm_package_config_testUrl\\\"}}\"",
+    "zip": "zip -r $npm_package_config_zip package.json app.js lib node_modules",
+    "deploy": "yarn bump && yarn zip && aws lambda update-function-code --function-name $npm_package_config_function --zip-file fileb://$npm_package_config_zip"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ua-digital-commerce/lighthouse-benchmark.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ua-digital-commerce/lighthouse-benchmark/issues"
+  },
+  "homepage": "https://github.com/ua-digital-commerce/lighthouse-benchmark#readme",
+  "dependencies": {
+    "lighthouse": "7.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^14.14.31",
+    "typescript": "^4.2.2"
+  }
+}
