@@ -1,5 +1,10 @@
+.dockerignore
+Dockerfile*
 .graveyard
 .history
 .git
 dist
 node_modules
+scripts
+*.zip
+tmp

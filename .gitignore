@@ -2,3 +2,5 @@ node_modules
 report.json
 *.csv
 *.zip
+dist
+tmp

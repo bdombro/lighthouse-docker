@@ -1,44 +1,58 @@
 {
   "name": "lighthouse-benchmark",
-  "version": "1.0.41",
-  "description": "This repo is a set of 2 scripts:",
+  "version": "1.0.46",
+  "description": "A simple nodejs micro-service that runs Lighthouse benchmarks. There are two versions: http server and lambda server.",
   "main": "index.js",
   "config": {
-    "zip": "bundle.zip",
     "function": "lighthouse-benchmark",
-    "testUrl": "https://storefront:3131labs@dev02-ua03-us.sfcc.ua-ecm.com/on/demandware.store/Sites-US-Site"
+    "testUrl": "https://google.com",
+    "awsEcrUrl": "1234.dkr.ecr.us-east-1.amazonaws.com",
+    "awsEcrImg": "lighthouse-benchmark-lambda"
   },
   "scripts": {
     "bump": "npm --no-git-tag-version version patch",
-    "build": "tsc",
+    "build": "rm -rf dist &> /dev/null; tsc",
+    "bundle": "cp Dockerfile.server-alpine Dockerfile; zip -r bundle.zip package.json package-lock.json server.js src tsconfig.json Dockerfile .ebextensions; rm Dockerfile",
     "start": "node server.js",
     "test": "curl -o report.json \"localhost:8080?url=$npm_package_config_testUrl\"",
-    "docker:build": "docker build -t bdombro/lighthouse-benchmark-server -f Dockerfile.server-alpine .",
-    "docker:start": "docker run -p 8080:8080 bdombro/lighthouse-benchmark-server",
+    "docker:build": "docker build -t lighthouse-benchmark-server -f Dockerfile.server-alpine .",
+    "docker:dev": "docker run -p 8080:8080 lighthouse-benchmark-server",
     "docker:test": "npm run test",
-    "lambda:build": "docker build -t bdombro/lighthouse-benchmark-lambda -f Dockerfile.lambda-debian .",
-    "lambda:build:dev": "docker build -t bdombro/lighthouse-benchmark-lambda -f Dockerfile.lambda-debian.dev .",
-    "lambda:start": "docker run -v ~/.aws-lambda-rie:/aws-lambda -p 8080:8080 --entrypoint /aws-lambda/aws-lambda-rie  bdombro/lighthouse-benchmark-lambda /usr/local/bin/npx aws-lambda-ric app.handler",
+    "lambda:build": "docker build -t lighthouse-benchmark-lambda -f Dockerfile.lambda-alpine .",
+    "lambda:dev": "docker run -v ~/.aws-lambda-rie:/aws-lambda -p 8080:8080  lighthouse-benchmark-lambda",
     "lambda:test": "curl -o report.json -XPOST \"http://localhost:8080/2015-03-31/functions/function/invocations\" -d \"{\\\"httpMethod\\\": \\\"GET\\\", \\\"queryStringParameters\\\": {\\\"url\\\": \\\"$npm_package_config_testUrl\\\"}}\"",
-    "zip": "zip -r $npm_package_config_zip package.json app.js lib node_modules",
-    "deploy": "yarn bump && yarn zip && aws lambda update-function-code --function-name $npm_package_config_function --zip-file fileb://$npm_package_config_zip"
+    "lambda:prod:test": "./aws/trigger-lambda $testUrl",
+    "lambda:deploy": "npm run lambda:deploy:login && npm run lambda:deploy:tag && npm run lambda:deploy:push && npm run lambda:deploy:apply",
+    "lambda:deploy:login": "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $npm_package_config_awsEcrUrl",
+    "lambda:deploy:tag": "docker tag $npm_package_config_awsEcrImg:latest $npm_package_config_awsEcrUrl/$npm_package_config_awsEcrImg:latest",
+    "lambda:deploy:push": "docker push $npm_package_config_awsEcrUrl/$npm_package_config_awsEcrImg:latest",
+    "lambda:deploy:apply": "echo Goto your Lambda overview webpage and click 'Deploy new Image'"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ua-digital-commerce/lighthouse-benchmark.git"
+    "url": "git+https://github.com/bdombro/lighthouse-docker.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "lambda",
+    "lighthouse",
+    "aws",
+    "nodejs",
+    "headless",
+    "chrome",
+    "docker",
+    "container"
+  ],
+  "author": "Brian Dombrowski",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/ua-digital-commerce/lighthouse-benchmark/issues"
+    "url": "https://github.com/bdombro/lighthouse-docker/issues"
   },
-  "homepage": "https://github.com/ua-digital-commerce/lighthouse-benchmark#readme",
+  "homepage": "https://github.com/bdombro/lighthouse-docker#readme",
   "dependencies": {
     "lighthouse": "7.0.1"
   },
   "devDependencies": {
     "@types/node": "^14.14.31",
-    "typescript": "^4.2.2"
+    "typescript": "4.2.2"
   }
 }

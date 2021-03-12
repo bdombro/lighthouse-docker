@@ -1,15 +1,42 @@
-# Currently not working b/c compile aws tools fails
-# If I ever get it working, should convert it to multistage like Dockerfile.lambda-debian
-
-
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Dockerfile.lambda-alpine
+#
+# An image ready for AWS Lambda. In contrast to the debian Dockerfile, 
+# this is based on a Chrome image -- slimmer and more reliable.
+#
+# Status: Working
+#
 # ref: https://nodejs.org/en/docs/guides/nodejs-docker-webapp/
 # ref: https://github.com/Zenika/alpine-chrome#run-examples
-# ref: https://www.npmjs.com/package/aws-lambda-ric # see this for lambda + 2-stage build instructions
+# ref: https://www.npmjs.com/package/aws-lambda-ric
+#
+# Using chrome 85 tag b/c AWS build fails with 86, I think bc 86 is built with a newer Alpine using
+# the latest tag. 85 also uses the latest tag, but it was built before the bug was introduced. Therefor,
+# this workaround to using 85 could be broken if the maintainer pushes a new build of 85 with the
+# broken version of Alpine. I should create an issue or pr in the repo, but would need to create a 
+# bug demo and don't have time now.
+# ref: https://gitlab.alpinelinux.org/alpine/aports/-/issues/12321
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-FROM zenika/alpine-chrome:with-node
+# Define custom function directory
+ARG FUNCTION_DIR="/function"
 
-# Install aws-lambda-cpp build dependencies
+
+# 2-stage docker build to build aws and reduce image size, bc aws tool building is heavy.
+
+###############################
+# Docker Build Stage 1
+###############################
+
+FROM zenika/alpine-chrome:85-with-node as build-image
+
+# Include global arg in this stage of the build
+ARG FUNCTION_DIR
+WORKDIR ${FUNCTION_DIR}
+
 USER root
+
+# Step 1: Build the aws-lambda-cpp node app
 RUN apk update
 RUN apk add --no-cache \
     build-base \
@@ -20,34 +47,42 @@ RUN apk add --no-cache \
     make \
     cmake \
     libcurl \
-    git
-USER chrome
-
-WORKDIR /usr/src/app
-RUN rm -rf *
+    git \
+    rsync
+RUN npm init -y &> /dev/null
+RUN npm i aws-lambda-ric
+RUN mv node_modules aws_node_modules
+# Step 2: Copy package*.json and install dev deps
 COPY package*.json ./
 RUN npm i
-
-USER root
-RUN apk add --no-cache build-base make cmake g++ unzip autoconf automake libtool git  zlib-dev libstdc++ libexecinfo-dev libcurl curl curl-dev
-
-RUN apk add git cmake make clang build-base llvm-static llvm-dev clang-static clang-dev
-
-# RUN apk add alpine-sdk cmake make clang clang-static clang-dev llvm-dev llvm-static \
-# 	&& git clone --depth=1 --recursive https://github.com/MaskRay/ccls \
-# 	&& cd ccls \
-# 	&& cmake -H. -BRelease -DCMAKE_BUILD_TYPE=Release \
-# 	&& cmake --build Release --target install
-# RUN apk add alpine-sdk clang llvm
-
-USER chrome
-
-# RUN npm install aws-lambda-ric
-USER root
-RUN npm i https://github.com/bdombro/aws-lambda-nodejs-runtime-interface-client.git
-USER chrome
-COPY . .
+# Step 3: Copy remaining source files
+COPY src src
+COPY tsconfig.json ./
+# Step 4: Transpile typescript
 RUN npx tsc
+# Step 5: Remove dev files
+RUN mv node_modules src tsconfig.json /tmp
+RUN npm i --production
+# Step 6: Merge aws-lambda-ric deps
+RUN rsync -ar aws_node_modules/ node_modules
+# Step 7: copy extra files
+COPY lambda.js README.md ./
 
-ENTRYPOINT ["/usr/bin/npx", "aws-lambda-ric"]
-CMD ["app.handler"]
+
+###############################
+# Docker Build Stage 2
+###############################
+
+FROM zenika/alpine-chrome:85-with-node
+
+# Include global arg in this stage of the build
+ARG FUNCTION_DIR
+WORKDIR ${FUNCTION_DIR}
+
+USER root
+COPY --from=build-image ${FUNCTION_DIR} ${FUNCTION_DIR}
+RUN chown -R chrome $FUNCTION_DIR
+
+ADD aws/aws-lambda-rie /usr/local/bin/aws-lambda-rie
+ADD aws/lambda-entryscript.sh /
+ENTRYPOINT ["/lambda-entryscript.sh"]

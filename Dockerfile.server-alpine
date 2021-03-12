@@ -1,17 +1,35 @@
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Dockerfile.server-alpine
+#
+# A simple http app that runs Lighthouse reports and returns the report in
+# the response body. In contrast to the debian Dockerfile, this is based on
+# a Chrome image -- slimmer and more reliable.
+#
+# Status: Working
+#
 # ref: https://nodejs.org/en/docs/guides/nodejs-docker-webapp/
 # ref: https://github.com/Zenika/alpine-chrome#run-examples
-# ref: https://www.npmjs.com/package/aws-lambda-ric # see this for lambda + 2-stage build instructions
+# ref: https://www.npmjs.com/package/aws-lambda-ric
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 FROM zenika/alpine-chrome:with-node
 
-WORKDIR /usr/src/app
+WORKDIR "/usr/src/app"
+
+# Step 1: Delete sample app
 RUN rm -rf *
-COPY package*.json ./
+# Step 1: Build app
+COPY --chown=chrome:chrome package*.json ./
 RUN npm i
-COPY . .
+COPY --chown=chrome:chrome  src src
+COPY --chown=chrome:chrome  tsconfig.json server.js ./
 RUN npx tsc
-# Remove dev node_modules
-RUN rm -rf node_modules && npm i --production
+RUN ls -la
+
+# Step 2: Clean build files
+RUN rm -rf node_modules src tsconfig.json
+# Step 3: Install production packages
+RUN npm i --production
 
 EXPOSE 8080
 CMD [ "node", "server.js" ]

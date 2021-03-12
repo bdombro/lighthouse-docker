@@ -1,13 +1,17 @@
 import { spawn } from 'child_process'
 import * as fs from 'fs'
 import type { SpawnError } from './@types/child_process'
-const lighthouse = require('lighthouse')
+
+import type lhtypes from 'lighthouse/types/externs'
+const lighthouse = require('lighthouse') as (url: string, options: Partial<LH.CliFlags>) => LH.RunnerResult
 
 import {waitForTruthy} from './lib/async'
 import logger from './lib/logger'
 
 let runningLock = false
 let jobCount = 0
+let chromeLaunched = 0
+chromeLauncher()
 
 export default async function lighthouseRunner(url: string, type = 'html') {
   const reqNo = ++jobCount
@@ -15,15 +19,16 @@ export default async function lighthouseRunner(url: string, type = 'html') {
   await waitForTruthy(() => !runningLock, {timeout: 2 * 60 * 1000})
   logger.info(`Running #${reqNo}:${url}`)
   runningLock = true
-  logger.info('1. Launching Chrome')
-  const chrome = await chromeLauncher()
+  logger.info('1. Awaiting Chrome')
+  await chromeLauncher()
 
-  // Run lighthouse twice and skip the first, to ensure that caches are pumped for the second
-	const runner = () => lighthouse(url, {logLevel: 'error', output: type, onlyCategories: ['performance'], port: chrome.port})
-  logger.info('2. Pumping caches')
-  await runner()
-  logger.info('3. Running audit')
-  const runnerResult = await runner()
+  logger.info('2. Running audit')
+  const runnerResult = await lighthouse(url, {
+    logLevel: 'error', 
+    output: type as any, 
+    onlyCategories: ['performance'], 
+    port: 9223,
+  })
 
 	// `.lhr` is the Lighthouse Result as a JS object
 	logger.info(`Result #${reqNo}:${url}: ${runnerResult.lhr.categories.performance.score * 100}`)
@@ -32,7 +37,11 @@ export default async function lighthouseRunner(url: string, type = 'html') {
   return runnerResult.report
 }
 
-async function chromeLauncher(reuse = false) {
+async function chromeLauncher() {
+  if (chromeLaunched++) {
+    await waitForTruthy(isChromeReady)
+    return
+  }
   const chromePath = await findChrome()
 
   logger.debug("Launching chrome with path: " + chromePath)
@@ -44,7 +53,7 @@ async function chromeLauncher(reuse = false) {
     '--disable-gpu',
     '--no-sandbox',
     '--homedir=/tmp',
-    '--single-process',
+    // '--single-process',
     '--data-path=/tmp/data-path',
     '--disk-cache-dir=/tmp/cache-dir',
     '--autoplay-policy=user-gesture-required',
@@ -110,10 +119,7 @@ async function chromeLauncher(reuse = false) {
   } )
 
   await waitForTruthy(isChromeReady, {timeout: 2 * 60 * 1000})
-
-  return {
-    port: 9223,
-  }
+  return
 
 
   function findChrome() {

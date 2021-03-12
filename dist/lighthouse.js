@@ -7,28 +7,34 @@ const async_1 = require("./lib/async");
 const logger_1 = require("./lib/logger");
 let runningLock = false;
 let jobCount = 0;
+let chromeLaunched = 0;
+chromeLauncher();
 async function lighthouseRunner(url, type = 'html') {
     const reqNo = ++jobCount;
-    logger_1.default.info(`Queud ${reqNo}:${url}`);
+    logger_1.default.info(`Queud #${reqNo}:${url}`);
     await async_1.waitForTruthy(() => !runningLock, { timeout: 2 * 60 * 1000 });
-    logger_1.default.info(`Running ${reqNo}:${url}`);
+    logger_1.default.info(`Running #${reqNo}:${url}`);
     runningLock = true;
-    logger_1.default.info('1. Launching Chrome');
-    const chrome = await chromeLauncher();
+    logger_1.default.info('1. Awaiting Chrome');
+    await chromeLauncher();
     // Run lighthouse twice and skip the first, to ensure that caches are pumped for the second
-    const runner = () => lighthouse(url, { logLevel: 'error', output: type, onlyCategories: ['performance'], port: chrome.port });
+    const runner = () => lighthouse(url, { logLevel: 'error', output: type, onlyCategories: ['performance'], port: 9223 });
     logger_1.default.info('2. Pumping caches');
     await runner();
     logger_1.default.info('3. Running audit');
     const runnerResult = await runner();
     // `.lhr` is the Lighthouse Result as a JS object
-    logger_1.default.info('Audit is done for', runnerResult.lhr.finalUrl);
-    logger_1.default.info('Performance score was', runnerResult.lhr.categories.performance.score * 100);
+    logger_1.default.info(`Result #${reqNo}:${url}: ${runnerResult.lhr.categories.performance.score * 100}`);
     runningLock = false;
     return runnerResult.report;
 }
 exports.default = lighthouseRunner;
-async function chromeLauncher(reuse = false) {
+async function chromeLauncher() {
+    if (chromeLaunched++) {
+        await async_1.waitForTruthy(isChromeReady);
+        await async_1.delay(10000);
+        return;
+    }
     const chromePath = await findChrome();
     logger_1.default.debug("Launching chrome with path: " + chromePath);
     const child = child_process_1.spawn(chromePath, [
@@ -96,9 +102,8 @@ async function chromeLauncher(reuse = false) {
         logger_1.default.debug(`child process exited with code ${code}`);
     });
     await async_1.waitForTruthy(isChromeReady, { timeout: 2 * 60 * 1000 });
-    return {
-        port: 9223,
-    };
+    await async_1.delay(10000);
+    return;
     function findChrome() {
         var _a;
         const execPath = (_a = [
