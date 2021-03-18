@@ -38,15 +38,9 @@ The location and capabilities of the server directly impact the audit results, a
 
 Meanwhile, some websites are non-public and require custom engineering to allow the auditing computer to access.
 
-### Decision #3: What to do with the metrics that Lighthouse produces?
+### Decision #3: Does combining multiple audits together improve precision, and if so how many?
 
-Lighthouse produces a lot of metrics, some of which are useful as-is, some are useful with some manipulation, some are not very useful.
-
-Many metrics involve the addition of other metrics, which make it hard to compare a specific metric between audits. A good example is Largest Contentful Paint (LCP). LCP The time at which the image/text on the screen starts to settle. LCP is a valuable metric for software performance, but is useless when comparing one audit to another because of webserver influence. Mainly, LCP is highly influenced by the time it takes for the web-server to reply to page requests, also known as Time-to-First-Byte (SRT). The research demonstrated in ref #6 that metrics like LCP become useful when adjusted for TTFB.
-
-Decision #4: Does combining multiple audits together improve precision, and if so how many?
-
-Yes! Averaging is a great start, and can be made even better when accounting for botched audits. In ref #6, we utilize Standard Deviation to identify and reduce the impact of botched audits.
+Yes! Averaging is a great start, and can be made even better when accounting for botched audits. In ref #6, we utilize a winsorizing algorithm, based on Standard Deviation, to identify and reduce the impact of outliers.
 
 ### Conclusion
 
