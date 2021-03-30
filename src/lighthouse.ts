@@ -28,13 +28,16 @@ export default async function lighthouseRunner(url: string, type = 'html') {
     output: type as any, 
     onlyCategories: ['performance'], 
     port: 9223,
+    extraHeaders:  {
+      ...process.env.HTTPHEADERS && JSON.parse(process.env.HTTPHEADERS)
+    },
   })
 
 	// `.lhr` is the Lighthouse Result as a JS object
 	logger.info(`Result #${reqNo}:${url}: ${runnerResult.lhr.categories.performance.score * 100}`)
 
   runningLock = false
-  return runnerResult.report
+  return runnerResult.report as string
 }
 
 async function chromeLauncher() {
@@ -53,7 +56,7 @@ async function chromeLauncher() {
     '--disable-gpu',
     '--no-sandbox',
     '--homedir=/tmp',
-    // '--single-process',
+    '--single-process',
     '--data-path=/tmp/data-path',
     '--disk-cache-dir=/tmp/cache-dir',
     '--autoplay-policy=user-gesture-required',

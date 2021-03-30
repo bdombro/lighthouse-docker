@@ -10,7 +10,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.
 export default async function handler (event: {httpMethod: string, queryStringParameters: Record<string, string>}, context: any) {
 	logger.info(`Received event on version ${packageJson.version}: ${JSON.stringify(event)}`)
 
-	let body;
+	let body = '';
 	let statusCode = '200';
 	const headers = {
 		'Content-Type': 'application/json',

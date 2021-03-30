@@ -1,5 +1,8 @@
 #!/bin/bash
 
+SET_COUNT=5 # 5 seems like the magic number for not overwhelming the URL
+NOW=`date '+%Y.%m.%d-%H:%M:%S'`
+
 URL=$1
 if [ -z "$URL" ]; then
   echo -n "URL: "
@@ -14,6 +17,7 @@ if [ -z "$OUT" ]; then
   echo -n "Output Dir: "
   read OUT
 fi
+OUT="$OUT/$NOW"
 
 # If your target server is faulty, this can help ignore the failures
 REDO_SERVER_FAILURES=$3
@@ -24,9 +28,6 @@ fi
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 rm -rf $OUT &> /dev/null
-
-SET_COUNT=5 # 5 seems like the magic number for not overwhelming the URL
-NOW=`date '+%Y.%m.%d-%H:%M:%S'`
 
 audit () {
   local setNo=$1
